@@ -147,9 +147,9 @@ def admin_start(admin_name):
     admin_names = [name for name in admins]
 
     return render_template("admin/admin_start.html", admin_name=admin_name, user_names=user_names,
-                               user_emails=user_emails, user_balances=user_balances, user_totals=user_totals,
-                               product_barcodes=product_barcodes, product_names=product_names,
-                               product_prices=product_prices, admin_names=admin_names)
+                           user_emails=user_emails, user_balances=user_balances, user_totals=user_totals,
+                           product_barcodes=product_barcodes, product_names=product_names,
+                           product_prices=product_prices, admin_names=admin_names)
 
 
 @app.route("/admin_start/<admin_name>/add_user", methods=["POST", "GET"])
@@ -169,7 +169,6 @@ def add_user(admin_name):
         except ValueError as error:
             print(str(error))
             message = str(error)
-            #return redirect(url_for("add_user", admin_name=admin_name))
         else:
             # user added successfully
             print("A new user " + new_username + " has been added by " + admin_name)
@@ -191,8 +190,9 @@ def view_user_history(admin_name, user_name):
     product_name = history["product name"]
     amount = history["amount"]
 
-    return render_template("admin/user_control/view_user_history.html", user_name=user_name, timestamp=timestamp, name=name,
-                           action=action, barcode=barcode, product_name=product_name, amount=amount)
+    return render_template("admin/user_control/view_user_history.html", admin_name=admin_name, user_name=user_name,
+                           timestamp=timestamp, name=name, action=action, barcode=barcode, product_name=product_name,
+                           amount=amount)
 
 
 @app.route("/admin_start/<admin_name>/add_user_balance/<user_name>", methods=["POST", "GET"])
@@ -202,16 +202,10 @@ def add_user_balance(admin_name, user_name):
         admin = Admin(admin_name, password)
 
         added_balance = request.form["added_balance"]
+        admin.addBalance(user_name, float(added_balance))
 
-        try:
-            admin.addBalance(user_name, float(added_balance))
-        except KeyError as error:
-            print("An error occurred: " + str(error))
-            return redirect(url_for("add_user_balance", admin_name=admin_name, user_name=user_name))
-        else:
-            # balance added successfully
-            print("Money added to balance!\tName: " + user_name + " | Amount: " + added_balance + " kr")
-            return redirect(url_for("admin_start", admin_name=admin_name))
+        print("Money added to balance!\tName: " + user_name + " | Amount: " + added_balance + " kr")
+        return redirect(url_for("admin_start", admin_name=admin_name))
     else:
         return render_template("admin/user_control/add_user_balance.html", admin_name=admin_name, user_name=user_name)
 
@@ -228,7 +222,8 @@ def admin_change_user_email(admin_name, user_name):
               " | New e-mail: " + new_email)
         return redirect(url_for("admin_start", admin_name=admin_name))
     else:
-        return render_template("admin/user_control/admin_change_user_email.html", admin_name=admin_name, user_name=user_name)
+        return render_template("admin/user_control/admin_change_user_email.html", admin_name=admin_name,
+                               user_name=user_name)
 
 
 @app.route("/admin_start/<admin_name>/change_user_password/<user_name>", methods=["POST", "GET"])
@@ -242,11 +237,13 @@ def admin_change_user_password(admin_name, user_name):
         print("User password changed by admin " + admin_name + "!\tName: " + user_name)
         return redirect(url_for("admin_start", admin_name=admin_name))
     else:
-        return render_template("admin/user_control/admin_change_user_password.html", admin_name=admin_name, user_name=user_name)
+        return render_template("admin/user_control/admin_change_user_password.html", admin_name=admin_name,
+                               user_name=user_name)
 
 
 @app.route("/admin_start/<admin_name>/remove_user/<user_name>", methods=["POST", "GET"])
 def remove_user(admin_name, user_name):
+    message = None
     if request.method == "POST":
         password = session.get("admin_password", None)
         admin = Admin(admin_name, password)
@@ -255,30 +252,20 @@ def remove_user(admin_name, user_name):
         decision = request.form["decision"]
 
         if user_name == user_name_check and decision == "yes":
-            try:
-                remove_name, email, balance, total = admin.removeUser(user_name)
-            except KeyError as error1:
-                print(error1)
-                return redirect(url_for("remove_user", admin_name=admin_name, user_name=user_name))
-            except ValueError as error2:
-                print(error2)
-                return redirect(url_for("remove_user", admin_name=admin_name, user_name=user_name))
-            else:
-                # user removed successfully
-                print("User removed!\tName: " + remove_name + " | E-mail: " + email + " | Balance: " + str(balance) +
-                      " kr | Total spent: " + str(total) + " kr")
-                return redirect(url_for("admin_start", admin_name=admin_name))
+            remove_name, email, balance, total = admin.removeUser(user_name)
+            print("User removed!\tName: " + remove_name + " | E-mail: " + email + " | Balance: " + str(balance) +
+                  " kr | Total spent: " + str(total) + " kr")
+            return redirect(url_for("admin_start", admin_name=admin_name))
 
         else:
-            print("The admin " + admin_name + " wanted to remove the user " + user_name + " but changed their mind.")
-            return redirect(url_for("remove_user", admin_name=admin_name, user_name=user_name))
-
-    else:
-        return render_template("admin/user_control/remove_user.html", admin_name=admin_name, user_name=user_name)
+            message = "Check failed"
+    return render_template("admin/user_control/remove_user.html", admin_name=admin_name,
+                           user_name=user_name, message=message)
 
 
 @app.route("/admin_start/<admin_name>/add_product", methods=["POST", "GET"])
 def add_product(admin_name):
+    message = None
     if request.method == "POST":
         password = session.get("admin_password", None)
         admin = Admin(admin_name, password)
@@ -290,15 +277,14 @@ def add_product(admin_name):
         try:
             admin.addProduct(new_barcode, new_name, float(new_price))
         except ValueError as error:
-            print("An error occurred: " + str(error))
-            return redirect(url_for("add_product", admin_name=admin_name))
+            print(str(error))
+            message = str(error)
         else:
             # product added successfully
             print("Product added!\t Barcode: " + new_barcode + "\tName: " + new_name + " | Price: " + str(new_price))
             return redirect(url_for("admin_start", admin_name=admin_name))
 
-    else:
-        return render_template("admin/product_control/add_product.html", admin_name=admin_name)
+    return render_template("admin/product_control/add_product.html", admin_name=admin_name, message=message)
 
 
 @app.route("/admin_start/<admin_name>/update_product_price/<product_barcode>/<product_name>", methods=["POST", "GET"])
@@ -308,18 +294,10 @@ def change_product_price(admin_name, product_barcode, product_name):
         admin = Admin(admin_name, password)
 
         new_price = request.form["new_price"]
-
-        try:
-            old_price = admin.changeProductPrice(product_barcode, float(new_price))
-        except KeyError as error:
-            print("An error occurred: " + str(error))
-            return redirect(url_for("update_product_price", admin_name=admin_name,
-                                    product_barcode=product_barcode, product_name=product_name))
-        else:
-            # price changed successfully
-            print("Price changed!\tBarcode: " + product_barcode + " | Name: " + product_name + " | Old price: " +
-                  str(old_price) + " | New price: " + str(new_price))
-            return redirect(url_for("admin_start", admin_name=admin_name))
+        old_price = admin.changeProductPrice(product_barcode, float(new_price))
+        print("Price changed!\tBarcode: " + product_barcode + " | Name: " + product_name + " | Old price: " +
+              str(old_price) + " | New price: " + str(new_price))
+        return redirect(url_for("admin_start", admin_name=admin_name))
     else:
         return render_template("admin/product_control/change_product_price.html", admin_name=admin_name,
                                product_barcode=product_barcode, product_name=product_name)
@@ -332,18 +310,10 @@ def change_product_name(admin_name, product_barcode, product_name):
         admin = Admin(admin_name, password)
 
         new_name = request.form["new_name"]
-
-        try:
-            old_name = admin.changeProductName(product_barcode, new_name)
-        except KeyError as error:
-            print("An error occurred: " + str(error))
-            return redirect(url_for("update_product_name", admin_name=admin_name,
-                                    product_barcode=product_barcode, product_name=product_name))
-        else:
-            # name changed successfully
-            print("Name updated!\tBarcode: " + product_barcode + " | Old name: " +
-                  str(old_name) + " | New name: " + str(new_name))
-            return redirect(url_for("admin_start", admin_name=admin_name))
+        old_name = admin.changeProductName(product_barcode, new_name)
+        print("Name updated!\tBarcode: " + product_barcode + " | Old name: " +
+              str(old_name) + " | New name: " + str(new_name))
+        return redirect(url_for("admin_start", admin_name=admin_name))
     else:
         return render_template("admin/product_control/change_product_name.html", admin_name=admin_name,
                                product_barcode=product_barcode, product_name=product_name)
@@ -351,6 +321,7 @@ def change_product_name(admin_name, product_barcode, product_name):
 
 @app.route("/admin_start/<admin_name>/remove_product/<product_barcode>/<product_name>", methods=["POST", "GET"])
 def remove_product(admin_name, product_barcode, product_name):
+    message = None
     if request.method == "POST":
         password = session.get("admin_password", None)
         admin = Admin(admin_name, password)
@@ -358,30 +329,22 @@ def remove_product(admin_name, product_barcode, product_name):
         decision = request.form["decision"]
 
         if decision == "yes":
-            try:
-                barcode, name, price = admin.removeProduct(product_barcode)
-            except KeyError as error1:
-                print(error1)
-                return redirect(url_for("remove_product", admin_name=admin_name, product_barcode=product_barcode,
-                                        product_name=product_name))
-            else:
-                # product removed successfully
-                print("Product removed!\tBarcode: " + barcode + " | Name: " + name + " | Price: " + str(price) +
-                      " kr")
-                return redirect(url_for("admin_start", admin_name=admin_name))
+            barcode, name, price = admin.removeProduct(product_barcode)
+
+            print("Product removed!\tBarcode: " + barcode + " | Name: " + name + " | Price: " + str(price) + " kr")
+            return redirect(url_for("admin_start", admin_name=admin_name))
         else:
             print("The admin " + admin_name + " wanted to remove product " + product_barcode +
                   " but changed their mind.")
-            return redirect(url_for("remove_product", admin_name=admin_name, product_barcode=product_barcode,
-                                    product_name=product_name))
+            message = "Check failed"
 
-    else:
-        return render_template("admin/product_control/remove_product.html", admin_name=admin_name,
-                               product_barcode=product_barcode, product_name=product_name)
+    return render_template("admin/product_control/remove_product.html", admin_name=admin_name,
+                           product_barcode=product_barcode, product_name=product_name, message=message)
 
 
 @app.route("/admin_start/<admin_name>/add_admin", methods=["POST", "GET"])
 def add_admin(admin_name):
+    message = None
     if request.method == "POST":
         password = session.get("admin_password", None)
         admin = Admin(admin_name, password)
@@ -393,19 +356,20 @@ def add_admin(admin_name):
             admin.addAdmin(new_name, new_password)
         except ValueError as error:
             print("An error occurred: " + str(error))
-            return redirect(url_for("add_admin", admin_name=admin_name))
+            message = str(error)
         else:
             # admin added successfully
             print("Admin added!\tName: " + new_name)
             return redirect(url_for("admin_start", admin_name=admin_name))
 
-    else:
-        return render_template("admin/admin_control/add_admin.html", admin_name=admin_name)
+    return render_template("admin/admin_control/add_admin.html", admin_name=admin_name, message=message)
 
 
-# todo fix so admin cannot remove itself
+# Note that an admin cannot remove itself, this would give an error and could result in there being no admins left.
+# This is controlled by not giving a remove link to the logged in admin in admin_start.html
 @app.route("/admin_start/<admin_name>/remove_admin/<remove_admin_name>", methods=["POST", "GET"])
 def remove_admin(admin_name, remove_admin_name):
+    message = None
     if request.method == "POST":
         password = session.get("admin_password", None)
         admin = Admin(admin_name, password)
@@ -414,30 +378,23 @@ def remove_admin(admin_name, remove_admin_name):
         decision = request.form["decision"]
 
         if remove_admin_name == admin_name_check and decision == "yes":
-            try:
-                remove_name = admin.removeAdmin(remove_admin_name)
-            except KeyError as error1:
-                print(error1)
-                return redirect(url_for("remove_admin", admin_name=admin_name, remove_admin_name=remove_admin_name))
-            except ValueError as error2:
-                print(error2)
-                return redirect(url_for("remove_admin", admin_name=admin_name, remove_admin_name=remove_admin_name))
-            else:
-                # admin removed successfully
-                print("Admin removed!\tName: " + remove_name)
-                return redirect(url_for("admin_start", admin_name=admin_name))
+            remove_name = admin.removeAdmin(remove_admin_name)
+
+            print("Admin removed!\tName: " + remove_name)
+            return redirect(url_for("admin_start", admin_name=admin_name))
 
         else:
             print("The admin " + admin_name + " wanted to remove the admin " + remove_admin_name +
                   " but changed their mind.")
-            return redirect(url_for("remove_admin", admin_name=admin_name, remove_admin_name=remove_admin_name))
+            message = "Check failed"
 
-    else:
-        return render_template("admin/admin_control/remove_admin.html", admin_name=admin_name, remove_admin_name=remove_admin_name)
+    return render_template("admin/admin_control/remove_admin.html", admin_name=admin_name,
+                           remove_admin_name=remove_admin_name, message=message)
 
 
 @app.route("/admin_start/<admin_name>/change_password/", methods=["POST", "GET"])
 def change_admin_password(admin_name):
+    message = None
     if request.method == "POST":
         password = session.get("admin_password", None)
         current_password = request.form["current_password"]
@@ -446,10 +403,10 @@ def change_admin_password(admin_name):
 
         if not current_password == password:
             print("The current password was incorrect.")
-            return redirect(url_for("change_admin_password", admin_name=admin_name))
+            message = "Incorrect password"
         elif not new_password == new_password_check:
             print("The new passwords did not match.")
-            return redirect(url_for("change_admin_password", admin_name=admin_name))
+            message = "New passwords did not match"
         else:
             # password changed successfully
             admin = Admin(admin_name, password)
@@ -458,8 +415,8 @@ def change_admin_password(admin_name):
             # the admin needs to log in again to store the correct password
             return redirect(url_for("login"))
 
-    else:
-        return render_template("admin/admin_control/change_admin_password.html", admin_name=admin_name)
+    return render_template("admin/admin_control/change_admin_password.html", admin_name=admin_name,
+                           message=message)
 
 
 if __name__ == '__main__':
@@ -467,4 +424,3 @@ if __name__ == '__main__':
     app.secret_key = 'super secret key'
 
     app.run(debug=True)
-
