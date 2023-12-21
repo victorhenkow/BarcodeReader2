@@ -1,4 +1,4 @@
-{%extends "base.html" %}
+{%extends "base/user_base.html" %}
 
 {% block head %}
 <title>User Page</title>
@@ -8,9 +8,24 @@
 <div class="content">
     <h1>History for {{ user_name }}</h1>
 </div>
-<div>
-    <p>Balance: {{ balance }}</p>
-    <p>Total spent: {{ total_spent }}</p>
+
+<div class="content">
+    <table>
+        <tr>
+            <td><a href="{{ url_for('change_user_email', user_name=user_name) }}">change e-mail</a></td>
+            <td><a href="{{ url_for('change_user_password', user_name=user_name) }}">change password</a></td>
+        </tr>
+    </table>
+</div>
+
+<div class="content">
+    <table>
+        <tr>
+            <td>E-mail: {{ email }}</td>
+            <td>Balance: {{ balance }}</td>
+            <td>Total spent: {{ total_spent }}</td>
+        </tr>
+    </table>
 </div>
 
 <div class="content">

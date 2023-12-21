@@ -1,4 +1,4 @@
-{%extends "base.html" %}
+{%extends "base/admin_base.html" %}
 
 {% block head %}
 <title>User Page</title>
@@ -10,7 +10,7 @@
 </div>
 
 <div class="content">
-    <form action="{{ url_for('add_balance', admin_name=admin_name, user_name=user_name) }}" method="POST">
+    <form action="{{ url_for('add_user_balance', admin_name=admin_name, user_name=user_name) }}" method="POST">
         <label for="added_balance">Add amount:</label>
         <input type="number" name="added_balance" id="added_balance">
         <br>

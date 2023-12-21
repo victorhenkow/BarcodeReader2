@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewpoint" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+
+    {% block head %}{% endblock %}
+
+</head>
+<body>
+
+<div class="content">
+    <table class="content">
+        <tr>
+            <td><a href="{{ url_for('login') }}">Log out</a></td>
+            <td><a href="{{ url_for('user_start', user_name=user_name) }}">Start page</a></td>
+        </tr>
+    </table>
+</div>
+
+{% block body %}{% endblock %}
+
+<div class="message">
+    {% if message %}
+    <p>{{ message }}</p>
+    {% endif %}
+</div>
+
+</body>
+</html>

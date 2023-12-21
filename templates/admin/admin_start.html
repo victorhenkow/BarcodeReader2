@@ -1,4 +1,4 @@
-{%extends "base.html" %}
+{%extends "base/admin_base.html" %}
 
 {% block head %}
 <title>Admin Page</title>
@@ -30,8 +30,10 @@
                 <td>{{ user_emails[i] }}</td>
                 <td>{{ user_balances[i] }}</td>
                 <td>{{ user_totals[i] }}</td>
-                <td><a href="{{ url_for('view_history', admin_name=admin_name, user_name=user_names[i]) }}">view history</a></td>
-                <td><a href="{{ url_for('add_balance', admin_name=admin_name, user_name=user_names[i]) }}">add balance</a></td>
+                <td><a href="{{ url_for('view_user_history', admin_name=admin_name, user_name=user_names[i]) }}">view history</a></td>
+                <td><a href="{{ url_for('add_user_balance', admin_name=admin_name, user_name=user_names[i]) }}">add balance</a></td>
+                <td><a href="{{ url_for('admin_change_user_email', admin_name=admin_name, user_name=user_names[i]) }}">change e-mail</a></td>
+                <td><a href="{{ url_for('admin_change_user_password', admin_name=admin_name, user_name=user_names[i]) }}">change password</a></td>
                 <td><a href="{{ url_for('remove_user', admin_name=admin_name, user_name=user_names[i]) }}">remove</a></td>
             </tr>
         {% endfor %}
@@ -58,8 +60,8 @@
                 <td>{{ product_barcodes[i] }}</td>
                 <td>{{ product_names[i] }}</td>
                 <td>{{ product_prices[i] }}</td>
-                <td><a href="{{ url_for('update_product_price', admin_name=admin_name, product_barcode=product_barcodes[i], product_name=product_names[i]) }}">update price</a></td>
-                <td><a href="{{ url_for('update_product_name', admin_name=admin_name, product_barcode=product_barcodes[i], product_name=product_names[i]) }}">update name</a></td>
+                <td><a href="{{ url_for('change_product_price', admin_name=admin_name, product_barcode=product_barcodes[i], product_name=product_names[i]) }}">update price</a></td>
+                <td><a href="{{ url_for('change_product_name', admin_name=admin_name, product_barcode=product_barcodes[i], product_name=product_names[i]) }}">update name</a></td>
                 <td><a href="{{ url_for('remove_product', admin_name=admin_name, product_barcode=product_barcodes[i] ,product_name=product_names[i]) }}">remove</a></td>
             </tr>
         {% endfor %}
@@ -71,7 +73,12 @@
 </div>
 
 <div class="content">
-    <p><a href="{{ url_for('add_admin', admin_name=admin_name) }}">add an admin</a></p>
+    <table>
+        <tr>
+            <td><a href="{{ url_for('change_admin_password', admin_name=admin_name) }}">change my password</a></td>
+            <td><a href="{{ url_for('add_admin', admin_name=admin_name) }}">add an admin</a></td>
+        </tr>
+    </table>
 </div>
 
 <div class="content">
@@ -82,8 +89,9 @@
         {% for i in range(admin_names|length) %}
             <tr>
                 <td>{{ admin_names[i] }}</td>
+                {% if not admin_names[i] == admin_name %}
                 <td><a href="{{ url_for('remove_admin', admin_name=admin_name, remove_admin_name=admin_names[i]) }}">remove</a></td>
-
+                {% endif %}
             </tr>
         {% endfor %}
     </table>

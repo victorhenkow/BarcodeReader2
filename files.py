@@ -5,6 +5,7 @@
 import pandas as pd
 import sys
 import time
+import os
 
 
 def save(dic, file_name):
@@ -29,6 +30,10 @@ def existInDict(key, dic):
         return True
     else:
         return False
+
+
+def deleteFile(file_name):
+    os.remove(file_name)
 
 
 class Logger(object):

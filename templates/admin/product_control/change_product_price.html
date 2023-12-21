@@ -1,4 +1,4 @@
-{%extends "base.html" %}
+{%extends "base/admin_base.html" %}
 
 {% block head %}
 <title>Login Page</title>
@@ -6,9 +6,9 @@
 
 {% block body %}
 <div class="content">
-    <h1>Update price of {{ product_name }}</h1>
+    <h1>Update price of the product {{ product_name }}</h1>
 
-    <form action="{{ url_for('update_product_price', admin_name=admin_name, product_barcode=product_barcode, product_name=product_name) }}" method="POST">
+    <form action="{{ url_for('change_product_price', admin_name=admin_name, product_barcode=product_barcode, product_name=product_name) }}" method="POST">
         <label for="new_price">New price:</label>
         <input type="number" name="new_price" id="new_price">
         <br>
