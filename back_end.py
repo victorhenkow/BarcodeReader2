@@ -9,6 +9,11 @@ from files import *
 import time
 
 
+# A custom error for when the user is not logged in
+class UserLoginError(Exception):
+    pass
+
+
 class User:
     def __init__(self, name):
         # users = {"name": {"password": password, "balance": balance, "email": E-mail, "total": total_spent}}
@@ -18,6 +23,9 @@ class User:
         self.users = readToDict(self.file_name)  # Dictionary of all the users from saved file
 
         self.user_exist = existInDict(self.name, self.users)  # Does the user exist or not
+
+        # A user only needs to be logged in to perform changes to the account.
+        self.logged_in = False
 
         self.history_file = self.getHistoryFileName()
         if self.user_exist:
@@ -34,18 +42,45 @@ class User:
         file_name = User.getFileName()
         return readToDict(file_name)
 
-    # returns the name if the user exist and the password is correct
+    # returns the True if the user exist and the password is correct else it returns False
+    # login() cannot be called in the constructor (unlike for Admin) because a password is not always given since most
+    # methods can be called without a password.
     def login(self, password):
         if not self.user_exist:
             # user does not exist error
-            raise KeyError("The user " + self.name + " does not exist.")
+            return False
 
         elif not password == self.getPassword():
             # wrong password error
-            raise KeyError("The password for user " + self.name + " is wrong.")
-
+            return False
         else:
-            return self.name
+            # the user logged in successfully
+            return True
+
+    def changePassword(self, password, new_password):
+        self.logged_in = self.login(password)
+
+        if not self.logged_in:
+            # user not logged in error
+            raise UserLoginError("User " + self.name + " is not logged in.")
+        else:
+            # password changed successfully
+            self.users[self.name]["password"] = new_password
+            save(self.users, self.file_name)
+
+    # returns the old e-mail
+    def changeEmail(self, password, new_email):
+        self.logged_in = self.login(password)
+
+        if not self.logged_in:
+            # user not logged in error
+            raise UserLoginError("User " + self.name + " is not logged in.")
+        else:
+            # e-mail changed successfully
+            old_email = self.users[self.name]["email"]
+            self.users[self.name]["email"] = new_email
+            save(self.users, self.file_name)
+            return old_email
 
     def getHistoryFileName(self):
         return self.historyFileName(self.name)
@@ -286,7 +321,7 @@ class Admin:
             admin = self.admins.get(name)
 
             if admin is not None:
-                # admin successfully added
+                # admin successfully removed
                 self.admins.pop(name)
                 save(self.admins, self.file_name)
                 return name
@@ -387,17 +422,15 @@ class Admin:
                 raise KeyError("There is no user with the name " + name)
             else:
                 # user email changed successfully
-                users[name]["email"] = email
+                file_name = User.getFileName()
 
                 user = User(name)
                 old_email = user.getEmail()
-                file_name = User.getFileName()
+                users[name]["email"] = email
                 save(users, file_name)
                 return old_email
 
     # returns an empty string
-    # we cannot return the old password for obvious reasons, but every other change method returns a string, so this
-    # one does as well for consistency
     def changeUserPassword(self, name, password):
         if not self.logged_in:
             # not logged in error
@@ -410,11 +443,10 @@ class Admin:
                 raise KeyError("There is no user with the name " + name)
             else:
                 # user password changed successfully
-                users[name]["password"] = password
-
                 file_name = User.getFileName()
+
+                users[name]["password"] = password
                 save(users, file_name)
-                return ""
 
     def addProduct(self, barcode, name, price):
         if not self.logged_in:
