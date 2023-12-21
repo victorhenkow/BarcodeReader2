@@ -1,20 +1,14 @@
-# Code written by Victor Henkow, August 2023
-# Version v1.0-beta
+# Code written by Victor Henkow, December 2023
+# Version v1.1-beta
 
-# This is the first working version of the code, bugs and other mistakes is therefore expected.
-# Already planned future improvements:
+# Planned future improvements:
 #   remove a specific purchase
-#   edit a user's info
-#   edit a product's price and name
-#   change password of an admin
 #   work directly with database files instead of converting to dictionary
 
 from files import *
 import time
-import os
 
 
-# todo fix password stuff
 class User:
     def __init__(self, name):
         # users = {"name": {"password": password, "balance": balance, "email": E-mail, "total": total_spent}}
@@ -34,6 +28,12 @@ class User:
     def getFileName():
         return "saves/users.pkl"
 
+    # returns a dictionary of all the users
+    @staticmethod
+    def getAllUsers():
+        file_name = User.getFileName()
+        return readToDict(file_name)
+
     # returns the name if the user exist and the password is correct
     def login(self, password):
         if not self.user_exist:
@@ -48,13 +48,16 @@ class User:
             return self.name
 
     def getHistoryFileName(self):
-        return "saves/history/" + self.name + "_history.pkl"
+        return self.historyFileName(self.name)
+
+    @staticmethod
+    def historyFileName(name):
+        return "saves/history/" + name + "_history.pkl"
 
     def getHistory(self):
         return self.history
 
-    @staticmethod
-    def addHistory(dic, file_name, name, action, barcode, product_name, amount):
+    def addHistory(self, dic, name, action, barcode, product_name, amount):
         time_stamp = time.ctime(time.time())
 
         # the history of the last 100 events are saved, after that the oldest events gets deleted
@@ -73,7 +76,7 @@ class User:
         dic["product name"].append(product_name)
         dic["amount"].append(amount)
 
-        save(dic, file_name)
+        save(dic, self.history_file)
 
     def getName(self):
         if not self.user_exist:
@@ -130,8 +133,7 @@ class User:
             self.users[self.name]["total"] += price  # no need to save since updateBalance() saves the same file
             self.updateBalance(price)
 
-            User.addHistory(self.history, self.history_file, self.name, "purchase", barcode,
-                            product.getName(), price)
+            self.addHistory(self.history, self.name, "buy", barcode, product.getName(), price)
 
     def removeLastBuy(self):
         if not self.user_exist:
@@ -146,58 +148,54 @@ class User:
                 last_amount = self.history["amount"][-1]
 
                 self.updateBalance(-last_amount)
-                User.addHistory(self.history, self.history_file, self.name, "revert last purchase", "",
-                                "", -last_amount)
+                self.addHistory(self.history, self.name, "revert last buy", "-",
+                                "-", -last_amount)
 
                 # remove the last purchase from the total spent
                 self.users[self.name]["total"] -= last_amount
                 save(self.users, self.file_name)
 
-    # should only be called from Admin
-    def addUser(self, password, email):
-        if self.name == "":
-            # not an acceptable name error
-            raise ValueError("A name cannot be an empty String.")
-        elif self.name == "admin":
-            # not an acceptable name error, the username admin is used to open the admin menu
-            raise ValueError("The name cannot be admin.")
-        elif not self.user_exist:
-            # new user added successfully
-            # A new user always have 0 balance
-            self.users[self.name] = {"password": password, "balance": 0, "email": email.lower(), "total": 0}
-            save(self.users, self.file_name)
 
-            # time is the local time when the action happened
-            # name is the name of the user or admin that makes the change
-            # actions is either purchase or edit by admin
-            # barcode and product are the barcode and name of the product, if it is an edit they are empty
-            # amount is the amount the balance has been changed with
-            # every time a balance change is made it is appended to each of the lists
-            history = {"time": [], "name": [], "action": [], "barcode": [], "product name": [], "amount": []}
-            save(history, self.history_file)
+class Product:
+    def __init__(self, barcode):
+        # products = {barcode: {"name": name, "price": price}}
+        self.file_name = self.getFileName()
+
+        self.barcode = (str(barcode).lower()).strip()
+        self.products = readToDict(self.file_name)
+
+        self.product_exist = existInDict(self.barcode, self.products)
+
+    # returns the name of the file with all the products
+    @staticmethod
+    def getFileName():
+        return "saves/products.pkl"
+
+    # returns a dictionary of all the products
+    @staticmethod
+    def getAllProducts():
+        file_name = Product.getFileName()
+        return readToDict(file_name)
+
+    def getBarcode(self):
+        if not self.product_exist:
+            # product does not exist error
+            raise KeyError("There is no product with the barcode " + self.barcode)
         else:
-            # user already exist
-            raise ValueError("A user with the name " + self.name + " already exist.")
+            return self.barcode
 
-    # should only be called from Admin
-    # returns the users info
-    def removeUser(self):
-        if not self.user_exist:
-            # the user does not exist error
-            raise KeyError("The user " + self.name + " does not exist.")
+    def getName(self):
+        if not self.product_exist:
+            raise KeyError("There is no product with the barcode " + self.barcode)
         else:
-            # remove the user
-            removed_user = self.users.pop(self.name)
-            save(self.users, self.file_name)
+            return self.products[self.barcode]["name"]
 
-            email = removed_user["email"]
-            balance = removed_user["balance"]
-            total = removed_user["total"]
-
-            # remove the history file
-            os.remove(self.history_file)
-
-            return email, balance, total
+    def getPrice(self):
+        if not self.product_exist:
+            # product does not exist error
+            raise KeyError("There is no product with the barcode " + self.barcode)
+        else:
+            return self.products[self.barcode]["price"]
 
 
 # A custom error for when the admin is not logged in
@@ -253,47 +251,12 @@ class Admin:
         else:
             return self.admins
 
-    # returns a dictionary of all the users
-    def getAllUsers(self):
-        if not self.logged_in:
-            # admin not logged in error
-            raise AdminLoginError("Admin " + self.name + " is not logged in.")
-        else:
-            file_name = User.getFileName()
-            return readToDict(file_name)
-
-    # returns a dictionary of all the products
-    def getAllProducts(self):
-        if not self.logged_in:
-            # admin not logged in error
-            raise AdminLoginError("Admin " + self.name + " is not logged in.")
-        else:
-            return Product.getAllProducts()
-
     def getName(self):
         if not self.admin_exist:
             # admin does not exist error
             raise KeyError("The admin " + self.name + " does not exist.")
         else:
             return self.name
-
-    def addUser(self, new_name, password, email):
-        if not self.logged_in:
-            # admin not logged in error
-            raise AdminLoginError("Admin " + self.name + " is not logged in.")
-        else:
-            new_user = User(new_name)
-            new_user.addUser(password, email)
-
-    # removes the user and returns the users info
-    def removeUser(self, name):
-        if not self.logged_in:
-            # admin not logged in error
-            raise AdminLoginError("Admin " + self.name + " is not logged in.")
-        else:
-            user = User(name)
-            email, balance, total = user.removeUser()
-            return name, email, balance, total
 
     def addAdmin(self, new_name, password):
         if self.name == "":
@@ -313,7 +276,8 @@ class Admin:
                 # admin already exist error
                 raise ValueError("An admin with the name " + new_name + " already exist.")
 
-    # the method returns the name
+        # the method returns the name
+
     def removeAdmin(self, name):
         if not self.logged_in:
             # admin not logged in error
@@ -322,12 +286,79 @@ class Admin:
             admin = self.admins.get(name)
 
             if admin is not None:
+                # admin successfully added
                 self.admins.pop(name)
                 save(self.admins, self.file_name)
                 return name
             else:
                 # the admin does not exist error
-                raise KeyError("No admin with the name of " + name + " exist.")
+                raise KeyError("The admin " + name + " does not exist.")
+
+    def addUser(self, name, password, email):
+        if not self.logged_in:
+            # admin not logged in error
+            raise AdminLoginError("Admin " + self.name + " is not logged in.")
+        else:
+            users = User.getAllUsers()
+            user_exist = existInDict(name, users)
+
+            if name == "":
+                # not an acceptable name error
+                raise ValueError("A name cannot be an empty String.")
+            elif name == "admin":
+                # not an acceptable name error, the username admin is used to open the admin menu
+                raise ValueError("The name cannot be admin.")
+            elif not user_exist:
+                # new user added successfully
+                file_name = User.getFileName()
+                history_file = User.historyFileName(name)
+
+                # A new user always have 0 balance
+                users[name] = {"password": password, "balance": 0, "email": email.lower(), "total": 0}
+                save(users, file_name)
+
+                # time is the local time when the action happened
+                # name is the name of the user or admin that makes the change
+                # actions is either purchase or edit by admin
+                # barcode and product are the barcode and name of the product, if it is an edit they are empty
+                # amount is the amount the balance has been changed with
+                # every time a balance change is made it is appended to each of the lists
+                history = {"time": [], "name": [], "action": [], "barcode": [], "product name": [], "amount": []}
+                save(history, history_file)
+            else:
+                # user already exist
+                raise ValueError("A user with the name " + name + " already exist.")
+
+    # removes the user and returns the users info
+    def removeUser(self, name):
+        if not self.logged_in:
+            # admin not logged in error
+            raise AdminLoginError("Admin " + self.name + " is not logged in.")
+        else:
+            users = User.getAllUsers()
+            user_exist = existInDict(name, users)
+
+            if not user_exist:
+                # the user does not exist error
+                raise KeyError("The user " + name + " does not exist.")
+            else:
+                # remove the user
+                user = User(name)
+
+                file_name = User.getFileName()
+                history_file = user.getHistoryFileName()
+
+                removed_user = users.pop(name)
+                save(users, file_name)
+
+                email = removed_user["email"]
+                balance = removed_user["balance"]
+                total = removed_user["total"]
+
+                # remove the history file
+                deleteFile(history_file)
+
+                return name, email, balance, total
 
     def addBalance(self, name, added_amount):
         if not self.logged_in:
@@ -340,137 +371,136 @@ class Admin:
 
             history_file = user.getHistoryFileName()
             history = readToDictList(history_file)
-            User.addHistory(history, history_file, self.name, "edit by admin", "", "",
+            user.addHistory(history, self.name, "edit by admin", "-", "-",
                             -added_amount)
 
-    def addProduct(self, new_barcode, new_name, price):
+    # returns the old E-mail
+    def changeUserEmail(self, name, email):
         if not self.logged_in:
             # not logged in error
             raise AdminLoginError("Admin " + self.name + " is not logged in.")
         else:
-            new_product = Product(new_barcode)
-            new_product.addProduct(new_name, price)
+            users = User.getAllUsers()
+            user_exist = existInDict(name, users)
 
-    # returns the info of the product
+            if not user_exist:
+                raise KeyError("There is no user with the name " + name)
+            else:
+                # user email changed successfully
+                users[name]["email"] = email
+
+                user = User(name)
+                old_email = user.getEmail()
+                file_name = User.getFileName()
+                save(users, file_name)
+                return old_email
+
+    # returns an empty string
+    # we cannot return the old password for obvious reasons, but every other change method returns a string, so this
+    # one does as well for consistency
+    def changeUserPassword(self, name, password):
+        if not self.logged_in:
+            # not logged in error
+            raise AdminLoginError("Admin " + self.name + " is not logged in.")
+        else:
+            users = User.getAllUsers()
+            user_exist = existInDict(name, users)
+
+            if not user_exist:
+                raise KeyError("There is no user with the name " + name)
+            else:
+                # user password changed successfully
+                users[name]["password"] = password
+
+                file_name = User.getFileName()
+                save(users, file_name)
+                return ""
+
+    def addProduct(self, barcode, name, price):
+        if not self.logged_in:
+            # not logged in error
+            raise AdminLoginError("Admin " + self.name + " is not logged in.")
+        else:
+            products = Product.getAllProducts()
+            product_exist = existInDict(barcode, products)
+
+            if barcode == "000" or barcode == "":
+                # not an acceptable name error
+                raise ValueError("A barcode cannot be an empty String or 000")  # "000" is reserved for a cancel command
+            elif price < 0:
+                # price must be positive
+                raise ValueError("The price cannot be negative.")
+            elif not product_exist:
+                # product added successfully
+                file_name = Product.getFileName()
+
+                products[barcode] = {"name": name, "price": price}
+                save(products, file_name)
+            else:
+                # product already exist error
+                raise ValueError("A product with the barcode " + barcode + " already exist.")
+
+    # returns the product's info
     def removeProduct(self, barcode):
         if not self.logged_in:
             # admin not logged in error
             raise AdminLoginError("Admin " + self.name + " is not logged in.")
         else:
-            product = Product(barcode)
-            name, price = product.removeProduct()
-            return barcode, name, price
+            products = Product.getAllProducts()
+            product_exist = existInDict(barcode, products)
 
-    # updates the price and returns the old one
-    def updateProductPrice(self, barcode, new_price):
-        if not self.logged_in:
-            # not logged in error
-            raise AdminLoginError("Admin " + self.name + " is not logged in.")
-        else:
-            product = Product(barcode)
-            old_price = product.updatePrice(new_price)
-            return old_price
+            if not product_exist:
+                raise KeyError("There is no product with the barcode " + barcode)
+            else:
+                # product removed successfully
+                file_name = Product.getFileName()
 
-    # updates the name and returns the old one
-    def updateProductName(self, barcode, new_name):
-        if not self.logged_in:
-            # not logged in error
-            raise AdminLoginError("Admin " + self.name + " is not logged in.")
-        else:
-            product = Product(barcode)
-            old_name = product.updateName(new_name)
-            return old_name
+                removed_product = products.pop(barcode)
+                save(products, file_name)
 
+                name = removed_product["name"]
+                price = removed_product["price"]
 
-class Product:
-    def __init__(self, barcode):
-        # products = {barcode: {"name": name, "price": price}}
-        self.file_name = self.getFileName()
+                return barcode, name, price
 
-        self.barcode = (str(barcode).lower()).strip()
-        self.products = readToDict(self.file_name)
-
-        self.product_exist = existInDict(self.barcode, self.products)
-
-    # returns the name of the file with all the products
-    @staticmethod
-    def getFileName():
-        return "saves/products.pkl"
-
-    # returns a dictionary of all the products
-    @staticmethod
-    def getAllProducts():
-        file_name = Product.getFileName()
-        return readToDict(file_name)
-
-    def getBarcode(self):
-        if not self.product_exist:
-            # product does not exist error
-            raise KeyError("There is no product with the barcode " + self.barcode)
-        else:
-            return self.barcode
-
-    def getName(self):
-        if not self.product_exist:
-            raise KeyError("There is no product with the barcode " + self.barcode)
-        else:
-            return self.products[self.barcode]["name"]
-
-    def getPrice(self):
-        if not self.product_exist:
-            # product does not exist error
-            raise KeyError("There is no product with the barcode " + self.barcode)
-        else:
-            return self.products[self.barcode]["price"]
-
-    # should only be called from Admin, maybe there is a better way to do this
-    def addProduct(self, name, price):
-        if self.barcode == "000" or self.barcode == "":
-            # not an acceptable name error
-            raise ValueError("A barcode cannot be an empty String or exit")  # "exit" is used as a cancel command
-        elif price < 0:
-            # price must be positive
-            raise ValueError("The price cannot be negative.")
-        elif not self.product_exist:
-            # product added successfully
-            self.products[self.barcode] = {"name": name, "price": price}
-            save(self.products, self.file_name)
-        else:
-            # product already exist error
-            raise ValueError("A product with the barcode " + self.barcode + " already exist.")
-
-    # should only be called from Admin
-    # returns the products info
-    def removeProduct(self):
-        if not self.product_exist:
-            raise KeyError("There is no product with the barcode " + self.barcode)
-        else:
-            removed_product = self.products.pop(self.barcode)
-            save(self.products, self.file_name)
-
-            name = removed_product["name"]
-            price = removed_product["price"]
-
-            return name, price
-
-    # should only be called from Admin
     # returns the old price
-    def updatePrice(self, new_price):
-        if not self.product_exist:
-            raise KeyError("There is no product with the barcode " + self.barcode)
+    def changeProductPrice(self, barcode, price):
+        if not self.logged_in:
+            # not logged in error
+            raise AdminLoginError("Admin " + self.name + " is not logged in.")
         else:
-            old_price = self.getPrice()
-            self.products[self.barcode]["price"] = new_price
-            save(self.products, self.file_name)
-            return old_price
+            products = Product.getAllProducts()
+            product_exist = existInDict(barcode, products)
 
-    # should only be called from Admin
-    # returns the old name
-    def updateName(self, new_name):
-        if not self.product_exist:
-            raise KeyError("There is no product with the barcode " + self.barcode)
+            if not product_exist:
+                raise KeyError("There is no product with the barcode " + barcode)
+            else:
+                # price updated successfully
+                file_name = Product.getFileName()
+
+                product = Product(barcode)
+                old_price = product.getPrice()
+                products[barcode]["price"] = price
+                save(products, file_name)
+                return old_price
+
+    # returns the old one name
+    def changeProductName(self, barcode, name):
+        if not self.logged_in:
+            # not logged in error
+            raise AdminLoginError("Admin " + self.name + " is not logged in.")
         else:
-            old_name = self.getName()
-            self.products[self.barcode]["name"] = new_name
-            save(self.products, self.file_name)
-            return old_name
+            products = Product.getAllProducts()
+            product_exist = existInDict(barcode, products)
+
+            if not product_exist:
+                raise KeyError("There is no product with the barcode " + barcode)
+            else:
+                # name updated successfully
+                file_name = Product.getFileName()
+
+                product = Product(barcode)
+                old_name = product.getName()
+                products[barcode]["name"] = name
+                save(products, file_name)
+                return old_name
