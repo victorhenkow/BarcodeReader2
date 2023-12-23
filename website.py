@@ -15,46 +15,41 @@ def login():
         privileges = request.form["privileges"]
 
         if privileges == "admin":
-            admin = Admin(username, password)
-
             try:
-                admin_name = admin.getName()
-            except KeyError as error:
-                print(str(error))
-                message = "Wrong username"
+                Admin(username, password)
+            except AuthenticationError as error1:
+                print(str(error1))
+                message = "Wrong username or password"
+            except ValueError as error2:
+                print(error2)
+                message = "Wrong username or password"
             else:
-                if not admin.logged_in:
-                    print("Wrong password for admin " + admin_name)
-                    message = "Wrong password"
-                else:
-                    session["admin_password"] = password
-                    print("Admin " + admin_name + " has logged in.")
-                    return redirect(url_for("admin_start", admin_name=admin_name))
+                session["admin_password"] = password
+                print("Admin " + username + " has logged in.")
+                return redirect(url_for("admin_start", admin_name=username))
 
         elif privileges == "user":
-            user = User(username)
-            logged_in = user.login(password)
-
             try:
-                user_name = user.getName()
-            except KeyError as error:
-                print(str(error))
-                message = "Wrong username"
+                User(username, password)
+            except AuthenticationError as error1:
+                print(str(error1))
+                message = "Wrong username or password"
+            except ValueError as error2:
+                print(error2)
+                message = "Wrong username or password"
             else:
-                if not logged_in:
-                    print("Wrong password for user " + user_name)
-                    message = "Wrong password"
-                else:
-                    session["user_password"] = password
-                    print("The user " + user_name + " has logged in.")
-                    return redirect(url_for("user_start", user_name=user_name))
+                session["user_password"] = password
+                print("The user " + username + " has logged in.")
+                return redirect(url_for("user_start", user_name=username))
 
     return render_template("login.html", message=message)
 
 
 @app.route("/user_start/<user_name>",  methods=["POST", "GET"])
 def user_start(user_name):
-    user = User(user_name)
+    password = session["user_password"]
+    user = User(user_name, password)
+
     email = user.getEmail()
     balance = user.getBalance()
     total_spent = user.getTotal()
@@ -98,12 +93,16 @@ def change_user_password(user_name):
             print("The new passwords did not match.")
             message = "Passwords did not match"
         else:
-            # password changed successfully
-            user = User(user_name)
-            user.changePassword(current_password, new_password)
-            print("Password changed by user!\tName: " + user_name)
-            # the user needs to log in again to store the correct password
-            return redirect(url_for("login"))
+            user = User(user_name, current_password)
+            try:
+                user.changePassword(new_password)
+            except ValueError as error:
+                print(error)
+                message = "Input a proper password"
+            else:
+                print("Password changed by user!\tName: " + user_name)
+                # the user needs to log in again to store the correct password
+                return redirect(url_for("login"))
 
     return render_template("user/change_user_password.html", user_name=user_name, message=message)
 
@@ -113,9 +112,9 @@ def change_user_email(user_name):
     if request.method == "POST":
         password = session.get("user_password", None)
 
-        user = User(user_name)
+        user = User(user_name, password)
         new_email = request.form["new_email"]
-        old_email = user.changeEmail(password, new_email)
+        old_email = user.changeEmail(new_email)
         print("E-mail changed by user!\tName: " + user_name + " | Old e-mail: " + old_email + " | New e-mail: " +
               new_email)
         return redirect(url_for("user_start", user_name=user_name))
@@ -197,17 +196,21 @@ def view_user_history(admin_name, user_name):
 
 @app.route("/admin_start/<admin_name>/add_user_balance/<user_name>", methods=["POST", "GET"])
 def add_user_balance(admin_name, user_name):
+    message = None
     if request.method == "POST":
         password = session.get("admin_password", None)
         admin = Admin(admin_name, password)
 
         added_balance = request.form["added_balance"]
-        admin.addBalance(user_name, float(added_balance))
+        if added_balance == "":
+            message = "Specify an amount"
+        else:
+            admin.addBalance(user_name, float(added_balance))
+            print("Money added to balance!\tName: " + user_name + " | Amount: " + added_balance + " kr")
+            return redirect(url_for("admin_start", admin_name=admin_name))
 
-        print("Money added to balance!\tName: " + user_name + " | Amount: " + added_balance + " kr")
-        return redirect(url_for("admin_start", admin_name=admin_name))
-    else:
-        return render_template("admin/user_control/add_user_balance.html", admin_name=admin_name, user_name=user_name)
+    return render_template("admin/user_control/add_user_balance.html", admin_name=admin_name, user_name=user_name,
+                           message=message)
 
 
 @app.route("/admin_start/<admin_name>/change_user_email/<user_name>", methods=["POST", "GET"])
@@ -289,18 +292,22 @@ def add_product(admin_name):
 
 @app.route("/admin_start/<admin_name>/update_product_price/<product_barcode>/<product_name>", methods=["POST", "GET"])
 def change_product_price(admin_name, product_barcode, product_name):
+    message = None
     if request.method == "POST":
         password = session.get("admin_password", None)
         admin = Admin(admin_name, password)
 
         new_price = request.form["new_price"]
-        old_price = admin.changeProductPrice(product_barcode, float(new_price))
-        print("Price changed!\tBarcode: " + product_barcode + " | Name: " + product_name + " | Old price: " +
-              str(old_price) + " | New price: " + str(new_price))
-        return redirect(url_for("admin_start", admin_name=admin_name))
-    else:
-        return render_template("admin/product_control/change_product_price.html", admin_name=admin_name,
-                               product_barcode=product_barcode, product_name=product_name)
+        if new_price == "":
+            message = "Specify a price"
+        else:
+            old_price = admin.changeProductPrice(product_barcode, float(new_price))
+            print("Price changed!\tBarcode: " + product_barcode + " | Name: " + product_name + " | Old price: " +
+                  str(old_price) + " | New price: " + str(new_price))
+            return redirect(url_for("admin_start", admin_name=admin_name))
+
+    return render_template("admin/product_control/change_product_price.html", admin_name=admin_name,
+                           product_barcode=product_barcode, product_name=product_name, message=message)
 
 
 @app.route("/admin_start/<admin_name>/update_product_name/<product_barcode>/<product_name>", methods=["POST", "GET"])

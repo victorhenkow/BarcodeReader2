@@ -9,8 +9,10 @@
     <h1>Change the e-mail of user {{ user_name }}</h1>
 
     <form action="{{ url_for('admin_change_user_email', admin_name=admin_name, user_name=user_name) }}" method="POST">
-        <label for="new_email">New E-mail:</label>
+        <label for="new_email">New E-mail</label>
+        <br>
         <input type="email" name="new_email" id="new_email">
+        <br>
         <br>
         <input type="submit" value="submit">
     </form>

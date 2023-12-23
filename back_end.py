@@ -8,28 +8,48 @@
 from files import *
 import time
 
+# todo require a type in to the methods string, float etc.
 
-# A custom error for when the user is not logged in
-class UserLoginError(Exception):
+
+# A custom error for authentication problems
+class AuthenticationError(Exception):
     pass
 
 
 class User:
-    def __init__(self, name):
+    def __init__(self, name, password=None):
         # users = {"name": {"password": password, "balance": balance, "email": E-mail, "total": total_spent}}
         self.file_name = self.getFileName()
+
+        self.password = password
 
         self.name = (name.lower()).strip()
         self.users = readToDict(self.file_name)  # Dictionary of all the users from saved file
 
-        self.user_exist = existInDict(self.name, self.users)  # Does the user exist or not
-
-        # A user only needs to be logged in to perform changes to the account.
+        self.__doesUserExist()
         self.logged_in = False
+        # if a password is given the user should get logged in
+        if password is not None:
+            self.logged_in = self.__login()
 
         self.history_file = self.getHistoryFileName()
-        if self.user_exist:
-            self.history = readToDictList(self.history_file)
+        self.history = readToDictList(self.history_file)
+
+    # raises an error if the user does not exist
+    def __doesUserExist(self):
+        user_exist = existInDict(self.name, self.users)
+
+        if not user_exist:
+            # user does not exist error
+            raise ValueError("The user " + self.name + " does not exist.")
+
+    # logs in the user if the password was correct otherwise raises an error
+    def __login(self):
+        correct_password = self.password == self.getPassword()
+        if not correct_password:
+            raise AuthenticationError("Incorrect password for the user " + self.name + ".")
+        else:
+            return True
 
     # returns the name of the file with all the users
     @staticmethod
@@ -42,39 +62,22 @@ class User:
         file_name = User.getFileName()
         return readToDict(file_name)
 
-    # returns the True if the user exist and the password is correct else it returns False
-    # login() cannot be called in the constructor (unlike for Admin) because a password is not always given since most
-    # methods can be called without a password.
-    def login(self, password):
-        if not self.user_exist:
-            # user does not exist error
-            return False
-
-        elif not password == self.getPassword():
-            # wrong password error
-            return False
-        else:
-            # the user logged in successfully
-            return True
-
-    def changePassword(self, password, new_password):
-        self.logged_in = self.login(password)
-
+    def changePassword(self, new_password):
         if not self.logged_in:
             # user not logged in error
-            raise UserLoginError("User " + self.name + " is not logged in.")
+            raise AuthenticationError("User " + self.name + " is not logged in.")
+        elif new_password == "":
+            raise ValueError("A password cannot be an empty string.")
         else:
             # password changed successfully
             self.users[self.name]["password"] = new_password
             save(self.users, self.file_name)
 
     # returns the old e-mail
-    def changeEmail(self, password, new_email):
-        self.logged_in = self.login(password)
-
+    def changeEmail(self, new_email):
         if not self.logged_in:
             # user not logged in error
-            raise UserLoginError("User " + self.name + " is not logged in.")
+            raise AuthenticationError("User " + self.name + " is not logged in.")
         else:
             # e-mail changed successfully
             old_email = self.users[self.name]["email"]
@@ -114,66 +117,40 @@ class User:
         save(dic, self.history_file)
 
     def getName(self):
-        if not self.user_exist:
-            # user does not exist error
-            raise KeyError("The user " + self.name + " does not exist.")
-        else:
-            return self.name
+        return self.name
 
     def getPassword(self):
-        if not self.user_exist:
-            # user does not exist error
-            raise KeyError("The user " + self.name + " does not exist.")
-        else:
-            password = self.users[self.name]["password"]
-            return password
+        password = self.users[self.name]["password"]
+        return password
 
     def getEmail(self):
-        if not self.user_exist:
-            # user does not exist error
-            raise KeyError("The user " + self.name + " does not exist.")
-        else:
-            email = self.users[self.name]["email"]
-            return email
+        email = self.users[self.name]["email"]
+        return email
 
     def getBalance(self):
-        if not self.user_exist:
-            # user does not exist error
-            raise KeyError("The user " + self.name + " does not exist.")
-        else:
-            balance = self.users[self.name]["balance"]
-            return balance
+        balance = self.users[self.name]["balance"]
+        return balance
 
     def getTotal(self):
         return self.users[self.name]["total"]
 
     def updateBalance(self, price):
-        if not self.user_exist:
-            # user does not exist error
-            raise KeyError("The user " + self.name + " does not exist.")
-        else:
-            # balance updated successfully
-            self.users[self.name]["balance"] -= price
-            save(self.users, self.file_name)
+        self.users[self.name]["balance"] -= price
+        save(self.users, self.file_name)
 
     def buy(self, barcode):
         product = Product(barcode)
         price = product.getPrice()
 
-        if not self.user_exist:
-            # user does not exist error
-            raise KeyError("The user " + self.name + " does not exist.")
-        else:
-            # successful buy
-            self.users[self.name]["total"] += price  # no need to save since updateBalance() saves the same file
-            self.updateBalance(price)
+        self.users[self.name]["total"] += price  # no need to save since updateBalance() saves the same file
+        self.updateBalance(price)
 
-            self.addHistory(self.history, self.name, "buy", barcode, product.getName(), price)
+        self.addHistory(self.history, self.name, "buy", barcode, product.getName(), price)
 
     def removeLastBuy(self):
-        if not self.user_exist:
-            # the user does not exist error
-            raise KeyError("The user " + self.name + " does not exist.")
+        if not self.logged_in:
+            # user not logged in error
+            raise AuthenticationError("User " + self.name + " is not logged in.")
         else:
             last_name = self.history["name"][-1]
             if not last_name == self.name:
@@ -199,7 +176,14 @@ class Product:
         self.barcode = (str(barcode).lower()).strip()
         self.products = readToDict(self.file_name)
 
-        self.product_exist = existInDict(self.barcode, self.products)
+        self.__doesProductExist()
+
+    def __doesProductExist(self):
+        product_exist = existInDict(self.barcode, self.products)
+
+        if not product_exist:
+            # product does not exist error
+            raise ValueError("There is no product with the barcode " + self.barcode + ".")
 
     # returns the name of the file with all the products
     @staticmethod
@@ -213,29 +197,13 @@ class Product:
         return readToDict(file_name)
 
     def getBarcode(self):
-        if not self.product_exist:
-            # product does not exist error
-            raise KeyError("There is no product with the barcode " + self.barcode)
-        else:
-            return self.barcode
+        return self.barcode
 
     def getName(self):
-        if not self.product_exist:
-            raise KeyError("There is no product with the barcode " + self.barcode)
-        else:
-            return self.products[self.barcode]["name"]
+        return self.products[self.barcode]["name"]
 
     def getPrice(self):
-        if not self.product_exist:
-            # product does not exist error
-            raise KeyError("There is no product with the barcode " + self.barcode)
-        else:
-            return self.products[self.barcode]["price"]
-
-
-# A custom error for when the admin is not logged in
-class AdminLoginError(Exception):
-    pass
+        return self.products[self.barcode]["price"]
 
 
 class Admin:
@@ -245,66 +213,56 @@ class Admin:
 
         self.name = (name.lower()).strip()
         self.password = password
-
         self.admins = readToDict(self.file_name)
-        self.admin_exist = existInDict(self.name, self.admins)
-        self.logged_in = self.login()
+
+        self.__doesAdminExist()
+        self.logged_in = self.__login()
+
+    def __doesAdminExist(self):
+        admin_exist = existInDict(self.name, self.admins)
+
+        if not admin_exist:
+            # admin does not exist error
+            raise ValueError("The admin " + self.name + " does not exist.")
 
     # returns True if the login was successful and False if it failed
-    def login(self):
-        if not self.admin_exist:
-            # We cannot raise an error here because it would break the addAdmin() function
-            return False
+    def __login(self):
+        correct_password = self.password == self.admins[self.name]["password"]
+        if not correct_password:
+            raise AuthenticationError("Incorrect password for the admin " + self.name + ".")
         else:
-            correct_password = self.password == self.admins[self.name]["password"]
-            if not correct_password:
-                return False
-            else:
-                return True
+            return True
 
-    # returns True if the input password equals the password for the admin
-    def checkPassword(self, password):
-        if not self.logged_in:
-            # admin not logged in error
-            raise AdminLoginError("Admin " + self.name + " is not logged in.")
-        else:
-            return password == self.admins[self.name]["password"]
-
-    def changePassword(self, password):
-        if not self.logged_in:
-            # admin not logged in error
-            raise AdminLoginError("Admin " + self.name + " is not logged in.")
-        else:
-            self.admins[self.name]["password"] = password
-            save(self.admins, self.file_name)
+    def getName(self):
+        return self.name
 
     # returns a dictionary of all the admins
     def getAllAdmins(self):
         if not self.logged_in:
             # admin not logged in error
-            raise AdminLoginError("Admin " + self.name + " is not logged in.")
+            raise AuthenticationError("Admin " + self.name + " is not logged in.")
         else:
             return self.admins
 
-    def getName(self):
-        if not self.admin_exist:
-            # admin does not exist error
-            raise KeyError("The admin " + self.name + " does not exist.")
+    def changePassword(self, password):
+        if not self.logged_in:
+            # admin not logged in error
+            raise AuthenticationError("Admin " + self.name + " is not logged in.")
         else:
-            return self.name
+            self.admins[self.name]["password"] = password
+            save(self.admins, self.file_name)
 
     def addAdmin(self, new_name, password):
-        if self.name == "":
+        if not self.logged_in:
+            # not logged in error
+            raise AuthenticationError("Admin " + self.name + " is not logged in.")
+        elif self.name == "":
             # not an acceptable name error
             raise ValueError("A name cannot be an empty String.")
-        elif not self.logged_in:
-            # not logged in error
-            raise AdminLoginError("Admin " + self.name + " is not logged in.")
         else:
             admin_exist = existInDict(new_name, self.admins)
             if not admin_exist:
                 # admin added
-                # The password is stored in plain text which is not optimal, but in this case it is fine I would say.
                 self.admins[new_name] = {"password": password}
                 save(self.admins, self.file_name)
             else:
@@ -316,11 +274,11 @@ class Admin:
     def removeAdmin(self, name):
         if not self.logged_in:
             # admin not logged in error
-            raise AdminLoginError("Admin " + self.name + " is not logged in.")
+            raise AuthenticationError("Admin " + self.name + " is not logged in.")
         else:
-            admin = self.admins.get(name)
+            admin_exist = existInDict(name, self.admins)
 
-            if admin is not None:
+            if admin_exist:
                 # admin successfully removed
                 self.admins.pop(name)
                 save(self.admins, self.file_name)
@@ -332,7 +290,7 @@ class Admin:
     def addUser(self, name, password, email):
         if not self.logged_in:
             # admin not logged in error
-            raise AdminLoginError("Admin " + self.name + " is not logged in.")
+            raise AuthenticationError("Admin " + self.name + " is not logged in.")
         else:
             users = User.getAllUsers()
             user_exist = existInDict(name, users)
@@ -368,14 +326,14 @@ class Admin:
     def removeUser(self, name):
         if not self.logged_in:
             # admin not logged in error
-            raise AdminLoginError("Admin " + self.name + " is not logged in.")
+            raise AuthenticationError("Admin " + self.name + " is not logged in.")
         else:
             users = User.getAllUsers()
             user_exist = existInDict(name, users)
 
             if not user_exist:
                 # the user does not exist error
-                raise KeyError("The user " + name + " does not exist.")
+                raise ValueError("The user " + name + " does not exist.")
             else:
                 # remove the user
                 user = User(name)
@@ -398,7 +356,7 @@ class Admin:
     def addBalance(self, name, added_amount):
         if not self.logged_in:
             # not logged in error
-            raise AdminLoginError("Admin " + self.name + " is not logged in.")
+            raise AuthenticationError("Admin " + self.name + " is not logged in.")
         else:
             user = User(name)
             # It is a negative amount because updateBalance() normally removes a price
@@ -413,13 +371,13 @@ class Admin:
     def changeUserEmail(self, name, email):
         if not self.logged_in:
             # not logged in error
-            raise AdminLoginError("Admin " + self.name + " is not logged in.")
+            raise AuthenticationError("Admin " + self.name + " is not logged in.")
         else:
             users = User.getAllUsers()
             user_exist = existInDict(name, users)
 
             if not user_exist:
-                raise KeyError("There is no user with the name " + name)
+                raise ValueError("There is no user with the name " + name)
             else:
                 # user email changed successfully
                 file_name = User.getFileName()
@@ -434,13 +392,13 @@ class Admin:
     def changeUserPassword(self, name, password):
         if not self.logged_in:
             # not logged in error
-            raise AdminLoginError("Admin " + self.name + " is not logged in.")
+            raise AuthenticationError("Admin " + self.name + " is not logged in.")
         else:
             users = User.getAllUsers()
             user_exist = existInDict(name, users)
 
             if not user_exist:
-                raise KeyError("There is no user with the name " + name)
+                raise ValueError("There is no user with the name " + name)
             else:
                 # user password changed successfully
                 file_name = User.getFileName()
@@ -451,7 +409,7 @@ class Admin:
     def addProduct(self, barcode, name, price):
         if not self.logged_in:
             # not logged in error
-            raise AdminLoginError("Admin " + self.name + " is not logged in.")
+            raise AuthenticationError("Admin " + self.name + " is not logged in.")
         else:
             products = Product.getAllProducts()
             product_exist = existInDict(barcode, products)
@@ -476,13 +434,13 @@ class Admin:
     def removeProduct(self, barcode):
         if not self.logged_in:
             # admin not logged in error
-            raise AdminLoginError("Admin " + self.name + " is not logged in.")
+            raise AuthenticationError("Admin " + self.name + " is not logged in.")
         else:
             products = Product.getAllProducts()
             product_exist = existInDict(barcode, products)
 
             if not product_exist:
-                raise KeyError("There is no product with the barcode " + barcode)
+                raise ValueError("There is no product with the barcode " + barcode)
             else:
                 # product removed successfully
                 file_name = Product.getFileName()
@@ -499,13 +457,13 @@ class Admin:
     def changeProductPrice(self, barcode, price):
         if not self.logged_in:
             # not logged in error
-            raise AdminLoginError("Admin " + self.name + " is not logged in.")
+            raise AuthenticationError("Admin " + self.name + " is not logged in.")
         else:
             products = Product.getAllProducts()
             product_exist = existInDict(barcode, products)
 
             if not product_exist:
-                raise KeyError("There is no product with the barcode " + barcode)
+                raise ValueError("There is no product with the barcode " + barcode)
             else:
                 # price updated successfully
                 file_name = Product.getFileName()
@@ -520,13 +478,13 @@ class Admin:
     def changeProductName(self, barcode, name):
         if not self.logged_in:
             # not logged in error
-            raise AdminLoginError("Admin " + self.name + " is not logged in.")
+            raise AuthenticationError("Admin " + self.name + " is not logged in.")
         else:
             products = Product.getAllProducts()
             product_exist = existInDict(barcode, products)
 
             if not product_exist:
-                raise KeyError("There is no product with the barcode " + barcode)
+                raise ValueError("There is no product with the barcode " + barcode)
             else:
                 # name updated successfully
                 file_name = Product.getFileName()

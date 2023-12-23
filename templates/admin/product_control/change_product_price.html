@@ -6,11 +6,13 @@
 
 {% block body %}
 <div class="content">
-    <h1>Update price of the product {{ product_name }}</h1>
+    <h1>Change the price of {{ product_name }}</h1>
 
     <form action="{{ url_for('change_product_price', admin_name=admin_name, product_barcode=product_barcode, product_name=product_name) }}" method="POST">
-        <label for="new_price">New price:</label>
+        <label for="new_price">New price</label>
+        <br>
         <input type="number" name="new_price" id="new_price">
+        <br>
         <br>
         <input type="submit" value="submit">
     </form>
