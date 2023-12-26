@@ -5,7 +5,7 @@
 #   remove a specific purchase
 #   work directly with database files instead of converting to dictionary
 
-from files import *
+import read_and_write as rw
 import time
 
 # todo require a type in to the methods string, float etc.
@@ -19,25 +19,24 @@ class AuthenticationError(Exception):
 class User:
     def __init__(self, name, password=None):
         # users = {"name": {"password": password, "balance": balance, "email": E-mail, "total": total_spent}}
-        self.file_name = self.getFileName()
-
-        self.password = password
+        self.db = rw.Database("users")  # Database object of the user
+        self.history_db = rw.Database("history")  # Database object of the history
 
         self.name = (name.lower()).strip()
-        self.users = readToDict(self.file_name)  # Dictionary of all the users from saved file
-
         self.__doesUserExist()
+        self.user = self.db.read(self.name)
+
+        self.password = password
         self.logged_in = False
         # if a password is given the user should get logged in
         if password is not None:
             self.logged_in = self.__login()
 
-        self.history_file = self.getHistoryFileName()
-        self.history = readToDictList(self.history_file)
+        self.history = self.history_db.read(self.name)
 
     # raises an error if the user does not exist
     def __doesUserExist(self):
-        user_exist = existInDict(self.name, self.users)
+        user_exist = self.db.exists(self.name)
 
         if not user_exist:
             # user does not exist error
@@ -51,16 +50,10 @@ class User:
         else:
             return True
 
-    # returns the name of the file with all the users
-    @staticmethod
-    def getFileName():
-        return "saves/users.pkl"
-
-    # returns a dictionary of all the users
     @staticmethod
     def getAllUsers():
-        file_name = User.getFileName()
-        return readToDict(file_name)
+        db = rw.Database("users")
+        return db.read_all()
 
     def changePassword(self, new_password):
         if not self.logged_in:
@@ -70,8 +63,8 @@ class User:
             raise ValueError("A password cannot be an empty string.")
         else:
             # password changed successfully
-            self.users[self.name]["password"] = new_password
-            save(self.users, self.file_name)
+            self.user["password"] = new_password
+            self.db.save(self.user)
 
     # returns the old e-mail
     def changeEmail(self, new_email):
@@ -80,146 +73,104 @@ class User:
             raise AuthenticationError("User " + self.name + " is not logged in.")
         else:
             # e-mail changed successfully
-            old_email = self.users[self.name]["email"]
-            self.users[self.name]["email"] = new_email
-            save(self.users, self.file_name)
+            old_email = self.user["email"]
+            self.user["email"] = new_email
+            self.db.save(self.user)
             return old_email
-
-    def getHistoryFileName(self):
-        return self.historyFileName(self.name)
-
-    @staticmethod
-    def historyFileName(name):
-        return "saves/history/" + name + "_history.pkl"
 
     def getHistory(self):
         return self.history
 
-    def addHistory(self, dic, name, action, barcode, product_name, amount):
-        time_stamp = time.ctime(time.time())
+    def addHistory(self, name, action, barcode, product_name, amount):
+        timestamp = time.ctime(time.time())
 
-        # the history of the last 100 events are saved, after that the oldest events gets deleted
-        if len(dic["time"]) > 100:  # can check the length of any of the lists since they are all the same length
-            del dic["time"][0]
-            del dic["name"][0]
-            del dic["action"][0]
-            del dic["barcode"][0]
-            del dic["product name"][0]
-            del dic["amount"][0]
+        # time is the local time when the action happened
+        # name is the name of the user that makes the change
+        # actions is either purchase or edit by admin_name
+        # barcode and product are the barcode and name of the product, if it is an edit they are empty
+        # amount is the amount the balance has been changed with
+        dic = {"time": timestamp, "name": name, "action": action, "barcode": barcode, "product name": product_name, "amount": amount}
 
-        dic["time"].append(time_stamp)
-        dic["name"].append(name)
-        dic["action"].append(action)
-        dic["barcode"].append(barcode)
-        dic["product name"].append(product_name)
-        dic["amount"].append(amount)
-
-        save(dic, self.history_file)
+        self.history_db.save(dic)
+        self.history = self.history_db.read(self.name)  # self.history needs to get updated
 
     def getName(self):
         return self.name
 
     def getPassword(self):
-        password = self.users[self.name]["password"]
+        password = self.user["password"]
         return password
 
     def getEmail(self):
-        email = self.users[self.name]["email"]
+        email = self.user["email"]
         return email
 
     def getBalance(self):
-        balance = self.users[self.name]["balance"]
+        balance = self.user["balance"]
         return balance
 
     def getTotal(self):
-        return self.users[self.name]["total"]
+        return self.user["total"]
 
     def updateBalance(self, price):
-        self.users[self.name]["balance"] -= price
-        save(self.users, self.file_name)
+        self.user["balance"] -= price
+        self.db.save(self.user)
 
     def buy(self, barcode):
         product = Product(barcode)
         price = product.getPrice()
 
-        self.users[self.name]["total"] += price  # no need to save since updateBalance() saves the same file
+        self.user["total"] += price  # no need to save since updateBalance() saves the same file
         self.updateBalance(price)
 
-        self.addHistory(self.history, self.name, "buy", barcode, product.getName(), price)
-
-    def removeLastBuy(self):
-        if not self.logged_in:
-            # user not logged in error
-            raise AuthenticationError("User " + self.name + " is not logged in.")
-        else:
-            last_name = self.history["name"][-1]
-            if not last_name == self.name:
-                # last balance edit was not made by the user
-                raise ValueError("The last edit of the user's balance was not made by the user.")
-            else:
-                last_amount = self.history["amount"][-1]
-
-                self.updateBalance(-last_amount)
-                self.addHistory(self.history, self.name, "revert last buy", "-",
-                                "-", -last_amount)
-
-                # remove the last purchase from the total spent
-                self.users[self.name]["total"] -= last_amount
-                save(self.users, self.file_name)
+        self.addHistory(self.name, "buy", barcode, product.getName(), price)
 
 
 class Product:
     def __init__(self, barcode):
         # products = {barcode: {"name": name, "price": price}}
-        self.file_name = self.getFileName()
+        self.db = rw.Database("products")  # Database object of the products
 
         self.barcode = (str(barcode).lower()).strip()
-        self.products = readToDict(self.file_name)
-
         self.__doesProductExist()
+        self.product = self.db.read(self.barcode)
 
     def __doesProductExist(self):
-        product_exist = existInDict(self.barcode, self.products)
+        product_exist = self.db.exists(self.barcode)
 
         if not product_exist:
             # product does not exist error
             raise ValueError("There is no product with the barcode " + self.barcode + ".")
 
-    # returns the name of the file with all the products
-    @staticmethod
-    def getFileName():
-        return "saves/products.pkl"
-
-    # returns a dictionary of all the products
     @staticmethod
     def getAllProducts():
-        file_name = Product.getFileName()
-        return readToDict(file_name)
+        db = rw.Database("products")
+        return db.read_all()
 
     def getBarcode(self):
         return self.barcode
 
     def getName(self):
-        return self.products[self.barcode]["name"]
+        return self.product["name"]
 
     def getPrice(self):
-        return self.products[self.barcode]["price"]
+        return self.product["price"]
 
 
 class Admin:
     def __init__(self, name, password):
         # admins = {name: {"password": password}}
-        self.file_name = "saves/admins.pkl"
+        self.db = rw.Database("admins")
 
         self.name = (name.lower()).strip()
-        self.password = password
-        self.admins = readToDict(self.file_name)
-
         self.__doesAdminExist()
+        self.admin = self.db.read(self.name)
+
+        self.password = password
         self.logged_in = self.__login()
 
     def __doesAdminExist(self):
-        admin_exist = existInDict(self.name, self.admins)
+        admin_exist = self.db.exists(self.name)
 
         if not admin_exist:
             # admin does not exist error
@@ -227,44 +178,44 @@ class Admin:
 
     # returns True if the login was successful and False if it failed
     def __login(self):
-        correct_password = self.password == self.admins[self.name]["password"]
+        correct_password = self.password == self.getPassword()
         if not correct_password:
             raise AuthenticationError("Incorrect password for the admin " + self.name + ".")
         else:
             return True
 
+    @staticmethod
+    def getAllAdmins():
+        db = rw.Database("admins")
+        return db.read_all()
+
     def getName(self):
         return self.name
 
-    # returns a dictionary of all the admins
-    def getAllAdmins(self):
-        if not self.logged_in:
-            # admin not logged in error
-            raise AuthenticationError("Admin " + self.name + " is not logged in.")
-        else:
-            return self.admins
+    def getPassword(self):
+        return self.admin["password"]
 
     def changePassword(self, password):
         if not self.logged_in:
             # admin not logged in error
             raise AuthenticationError("Admin " + self.name + " is not logged in.")
         else:
-            self.admins[self.name]["password"] = password
-            save(self.admins, self.file_name)
+            self.admin["password"] = password
+            self.db.save(self.admin)
 
     def addAdmin(self, new_name, password):
         if not self.logged_in:
             # not logged in error
             raise AuthenticationError("Admin " + self.name + " is not logged in.")
-        elif self.name == "":
+        elif new_name == "":
             # not an acceptable name error
             raise ValueError("A name cannot be an empty String.")
         else:
-            admin_exist = existInDict(new_name, self.admins)
+            admin_exist = self.db.exists(new_name)
             if not admin_exist:
                 # admin added
-                self.admins[new_name] = {"password": password}
-                save(self.admins, self.file_name)
+                dic = {"name": new_name, "password": password}
+                self.db.new(dic)
             else:
                 # admin already exist error
                 raise ValueError("An admin with the name " + new_name + " already exist.")
@@ -276,12 +227,11 @@ class Admin:
             # admin not logged in error
             raise AuthenticationError("Admin " + self.name + " is not logged in.")
         else:
-            admin_exist = existInDict(name, self.admins)
+            admin_exist = self.db.exists(name)
 
             if admin_exist:
                 # admin successfully removed
-                self.admins.pop(name)
-                save(self.admins, self.file_name)
+                self.db.remove(name)
                 return name
             else:
                 # the admin does not exist error
@@ -292,8 +242,8 @@ class Admin:
             # admin not logged in error
             raise AuthenticationError("Admin " + self.name + " is not logged in.")
         else:
-            users = User.getAllUsers()
-            user_exist = existInDict(name, users)
+            user_db = rw.Database("users")
+            user_exist = user_db.exists(name)
 
             if name == "":
                 # not an acceptable name error
@@ -303,21 +253,10 @@ class Admin:
                 raise ValueError("The name cannot be admin.")
             elif not user_exist:
                 # new user added successfully
-                file_name = User.getFileName()
-                history_file = User.historyFileName(name)
 
                 # A new user always have 0 balance
-                users[name] = {"password": password, "balance": 0, "email": email.lower(), "total": 0}
-                save(users, file_name)
-
-                # time is the local time when the action happened
-                # name is the name of the user or admin that makes the change
-                # actions is either purchase or edit by admin
-                # barcode and product are the barcode and name of the product, if it is an edit they are empty
-                # amount is the amount the balance has been changed with
-                # every time a balance change is made it is appended to each of the lists
-                history = {"time": [], "name": [], "action": [], "barcode": [], "product name": [], "amount": []}
-                save(history, history_file)
+                new_user = {"name": name, "password": password, "balance": 0, "email": email.lower(), "total": 0}
+                user_db.new(new_user)
             else:
                 # user already exist
                 raise ValueError("A user with the name " + name + " already exist.")
@@ -328,28 +267,20 @@ class Admin:
             # admin not logged in error
             raise AuthenticationError("Admin " + self.name + " is not logged in.")
         else:
-            users = User.getAllUsers()
-            user_exist = existInDict(name, users)
+            user_db = rw.Database("users")
+            user_exist = user_db.exists(name)
 
             if not user_exist:
                 # the user does not exist error
                 raise ValueError("The user " + name + " does not exist.")
             else:
                 # remove the user
-                user = User(name)
+                user = user_db.read(name)
+                email = user["email"]
+                balance = user["balance"]
+                total = user["total"]
 
-                file_name = User.getFileName()
-                history_file = user.getHistoryFileName()
-
-                removed_user = users.pop(name)
-                save(users, file_name)
-
-                email = removed_user["email"]
-                balance = removed_user["balance"]
-                total = removed_user["total"]
-
-                # remove the history file
-                deleteFile(history_file)
+                user_db.remove(name)
 
                 return name, email, balance, total
 
@@ -362,10 +293,7 @@ class Admin:
             # It is a negative amount because updateBalance() normally removes a price
             user.updateBalance(-added_amount)
 
-            history_file = user.getHistoryFileName()
-            history = readToDictList(history_file)
-            user.addHistory(history, self.name, "edit by admin", "-", "-",
-                            -added_amount)
+            user.addHistory(name, "edit by " + self.name, "-", "-", -added_amount)
 
     # returns the old E-mail
     def changeUserEmail(self, name, email):
@@ -373,19 +301,17 @@ class Admin:
             # not logged in error
             raise AuthenticationError("Admin " + self.name + " is not logged in.")
         else:
-            users = User.getAllUsers()
-            user_exist = existInDict(name, users)
+            user_db = rw.Database("users")
+            user_exist = user_db.exists(name)
 
             if not user_exist:
                 raise ValueError("There is no user with the name " + name)
             else:
                 # user email changed successfully
-                file_name = User.getFileName()
-
-                user = User(name)
-                old_email = user.getEmail()
-                users[name]["email"] = email
-                save(users, file_name)
+                user = user_db.read(name)
+                old_email = user["email"]
+                user["email"] = email
+                user_db.save(user)
                 return old_email
 
     # returns an empty string
@@ -394,25 +320,24 @@ class Admin:
             # not logged in error
             raise AuthenticationError("Admin " + self.name + " is not logged in.")
         else:
-            users = User.getAllUsers()
-            user_exist = existInDict(name, users)
+            user_db = rw.Database("users")
+            user_exist = user_db.read(name)
 
             if not user_exist:
                 raise ValueError("There is no user with the name " + name)
             else:
                 # user password changed successfully
-                file_name = User.getFileName()
-
-                users[name]["password"] = password
-                save(users, file_name)
+                user = user_db.read(name)
+                user["password"] = password
+                user_db.save(user)
 
     def addProduct(self, barcode, name, price):
         if not self.logged_in:
             # not logged in error
             raise AuthenticationError("Admin " + self.name + " is not logged in.")
         else:
-            products = Product.getAllProducts()
-            product_exist = existInDict(barcode, products)
+            product_db = rw.Database("products")
+            product_exist = product_db.exists(barcode)
 
             if barcode == "000" or barcode == "":
                 # not an acceptable name error
@@ -422,10 +347,8 @@ class Admin:
                 raise ValueError("The price cannot be negative.")
             elif not product_exist:
                 # product added successfully
-                file_name = Product.getFileName()
-
-                products[barcode] = {"name": name, "price": price}
-                save(products, file_name)
+                product = {"barcode": barcode, "name": name, "price": price}
+                product_db.new(product)
             else:
                 # product already exist error
                 raise ValueError("A product with the barcode " + barcode + " already exist.")
@@ -436,20 +359,18 @@ class Admin:
             # admin not logged in error
             raise AuthenticationError("Admin " + self.name + " is not logged in.")
         else:
-            products = Product.getAllProducts()
-            product_exist = existInDict(barcode, products)
+            product_db = rw.Database("products")
+            product_exist = product_db.exists(barcode)
 
             if not product_exist:
                 raise ValueError("There is no product with the barcode " + barcode)
             else:
                 # product removed successfully
-                file_name = Product.getFileName()
+                product = product_db.read(barcode)
+                name = product["name"]
+                price = product["price"]
 
-                removed_product = products.pop(barcode)
-                save(products, file_name)
-
-                name = removed_product["name"]
-                price = removed_product["price"]
+                product_db.remove(barcode)
 
                 return barcode, name, price
 
@@ -459,19 +380,17 @@ class Admin:
             # not logged in error
             raise AuthenticationError("Admin " + self.name + " is not logged in.")
         else:
-            products = Product.getAllProducts()
-            product_exist = existInDict(barcode, products)
+            product_db = rw.Database("products")
+            product_exist = product_db.exists(barcode)
 
             if not product_exist:
                 raise ValueError("There is no product with the barcode " + barcode)
             else:
                 # price updated successfully
-                file_name = Product.getFileName()
-
-                product = Product(barcode)
-                old_price = product.getPrice()
-                products[barcode]["price"] = price
-                save(products, file_name)
+                product = product_db.read(barcode)
+                old_price = product["price"]
+                product["price"] = price
+                product_db.save(product)
                 return old_price
 
     # returns the old one name
@@ -480,17 +399,15 @@ class Admin:
             # not logged in error
             raise AuthenticationError("Admin " + self.name + " is not logged in.")
         else:
-            products = Product.getAllProducts()
-            product_exist = existInDict(barcode, products)
+            product_db = rw.Database("products")
+            product_exist = product_db.exists(barcode)
 
             if not product_exist:
                 raise ValueError("There is no product with the barcode " + barcode)
             else:
                 # name updated successfully
-                file_name = Product.getFileName()
-
-                product = Product(barcode)
-                old_name = product.getName()
-                products[barcode]["name"] = name
-                save(products, file_name)
+                product = product_db.read(barcode)
+                old_name = product["name"]
+                product["name"] = name
+                product_db.save(product)
                 return old_name

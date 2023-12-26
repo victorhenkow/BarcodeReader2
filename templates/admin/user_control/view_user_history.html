@@ -19,7 +19,7 @@
             <th>Product</th>
             <th>Price</th>
         </tr>
-        {% for i in range(timestamp|length, -1, -1) %}
+        {% for i in range(timestamp|length) %}
             <tr>
                 <td>{{ timestamp[i] }}</td>
                 <td>{{ name[i] }}</td>

@@ -65,9 +65,13 @@ def user_start(user_name):
 
     products = Product.getAllProducts()
     # extract all the lists from the dictionary products
-    product_barcodes = [p_barcode for p_barcode in products]
-    product_names = [products[product_barcode]["name"] for product_barcode in product_barcodes]
-    product_prices = [products[product_barcode]["price"] for product_barcode in product_barcodes]
+    #product_barcodes = [p_barcode for p_barcode in products]
+    #product_names = [products[product_barcode]["name"] for product_barcode in product_barcodes]
+    #product_prices = [products[product_barcode]["price"] for product_barcode in product_barcodes]
+
+    product_barcodes = products["barcodes"]
+    product_names = products["names"]
+    product_prices = products["prices"]
 
     return render_template("user/user_start.html", user_name=user_name, email=email, balance=balance,
                            total_spent=total_spent, timestamp=timestamp, name=name, action=action, barcode=barcode,
@@ -130,20 +134,20 @@ def admin_start(admin_name):
     users = User.getAllUsers()
 
     # extract the lists from the dictionary users
-    user_names = [name for name in users]
-    user_emails = [users[user_name]["email"] for user_name in user_names]
-    user_balances = [users[user_name]["balance"] for user_name in user_names]
-    user_totals = [users[user_name]["total"] for user_name in user_names]
+    user_names = users["names"]
+    user_emails = users["emails"]
+    user_balances = users["balances"]
+    user_totals = users["totals"]
 
     products = Product.getAllProducts()
     # extract all the lists from the dictionary products
-    product_barcodes = [p_barcode for p_barcode in products]
-    product_names = [products[product_barcode]["name"] for product_barcode in product_barcodes]
-    product_prices = [products[product_barcode]["price"] for product_barcode in product_barcodes]
+    product_barcodes = products["barcodes"]
+    product_names = products["names"]
+    product_prices = products["prices"]
 
     admins = admin.getAllAdmins()
     # create a list of all the admin names
-    admin_names = [name for name in admins]
+    admin_names = admins["names"]
 
     return render_template("admin/admin_start.html", admin_name=admin_name, user_names=user_names,
                            user_emails=user_emails, user_balances=user_balances, user_totals=user_totals,
