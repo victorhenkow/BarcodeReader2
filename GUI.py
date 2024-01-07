@@ -34,21 +34,21 @@ class Windows(tk.Tk):
         return rw.read_settings()
 
 
-class SplashGreen(tk.Frame):
+class SplashSucceed(tk.Frame):
     def __init__(self, parent, controller, *args):
         tk.Frame.__init__(self, parent)
         self.controller = controller
 
         settings = Windows.getSettings()
 
-        self.configure(bg="green")
+        self.configure(bg=settings["splash succeed color"])
 
         splash_time = int(settings["splash time"])
 
         self.timeout = self.after(splash_time, lambda: self.controller.show_page(*args))
 
 
-class SplashRed(tk.Frame):
+class SplashFail(tk.Frame):
     def __init__(self, parent, controller, *args):
         tk.Frame.__init__(self, parent)
         self.controller = controller
@@ -57,7 +57,7 @@ class SplashRed(tk.Frame):
 
         settings = Windows.getSettings()
 
-        self.configure(bg="red")
+        self.configure(bg=settings["splash fail color"])
 
         splash_time = int(settings["splash time"])
 
@@ -78,6 +78,7 @@ class ScanUserPage(tk.Frame):
         self.font = settings["font"]
         self.bg_color = settings["background color"]
         self.fg_color = settings["foreground color"]
+        self.box_color = settings["box color"]
         self.pad = settings["padding"]
 
         self.createGraphics()
@@ -86,7 +87,7 @@ class ScanUserPage(tk.Frame):
         self.configure(bg=self.bg_color)
 
         name_label = tk.Label(self, text="Username", font=(self.font, self.font_size), bg=self.bg_color, fg=self.fg_color, pady=self.pad)
-        name_entry = tk.Entry(self, textvariable=self.name, font=(self.font, self.font_size), bg=self.fg_color, fg=self.bg_color)
+        name_entry = tk.Entry(self, textvariable=self.name, font=(self.font, self.font_size), bg=self.box_color, fg=self.bg_color, borderwidth=0, highlightthickness=0)
 
         #submit_button = tk.Button(self, text="Submit", command=self.login, font=(self.font, self.font_size), bg="black", fg="red")
 
@@ -104,11 +105,11 @@ class ScanUserPage(tk.Frame):
             user = User(name)
         except ValueError as error:
             print(str(error))
-            self.controller.show_page(SplashRed, ScanUserPage)
+            self.controller.show_page(SplashFail, ScanUserPage)
         else:
             print("User " + name + " has started a purchase.")
             settings = Windows.getSettings()
-            self.controller.show_page(SplashGreen, ScanProductPage, user, int(settings["first timeout"]))
+            self.controller.show_page(SplashSucceed, ScanProductPage, user, int(settings["first timeout"]))
 
 
 class ScanProductPage(tk.Frame):
@@ -125,6 +126,7 @@ class ScanProductPage(tk.Frame):
         self.pad = settings["padding"]
         self.bg_color = settings["background color"]
         self.fg_color = settings["foreground color"]
+        self.box_color = settings["box color"]
         self.history_number = int(settings["history displayed when buy"])
         self.timeout_2 = int(settings["second timeout"])
 
@@ -149,7 +151,7 @@ class ScanProductPage(tk.Frame):
 
         barcode_title = tk.Label(self, text="Welcome " + self.username + "!\nScan a product barcode.", bg=self.bg_color, fg=self.fg_color, font=(self.font, self.font_size), pady=self.pad)
         barcode_label = tk.Label(self, text="Balance: " + str(self.balance) + " kr", bg=self.bg_color, fg=self.fg_color, font=(self.font, self.accent_font_size), pady=self.pad)
-        barcode_entry = tk.Entry(self, textvariable=self.barcode, font=(self.font, self.font_size), bg=self.fg_color, fg=self.bg_color)
+        barcode_entry = tk.Entry(self, textvariable=self.barcode, font=(self.font, self.font_size), bg=self.box_color, fg=self.bg_color, borderwidth=0, highlightthickness=0)
         countdown_label = tk.Label(self, textvariable=self.count_var, bg=self.bg_color, fg=self.fg_color, font=(self.font, self.font_size), pady=self.pad)
         #submit_button = tk.Button(self, text="Submit", command=self.buy)
 
@@ -161,15 +163,15 @@ class ScanProductPage(tk.Frame):
         countdown_label.pack()
         #submit_button.pack()
 
-        # display the last 4 purchases
+        # display the last purchases
         history_title_label = tk.Label(self, text="\n History \n----------------------", bg=self.bg_color, fg=self.fg_color, font=(self.font, self.accent_font_size))
         history_title_label.pack()
         try:  # The user may not have four items in its history
             for i in range(self.history_number):
-                timestamp = self.history["time"][-i]
-                barcode = self.history["barcode"][-i]
-                name = self.history["product name"][-i]
-                price = str(self.history["amount"][-i])
+                timestamp = self.history["time"][i]
+                barcode = self.history["barcode"][i]
+                name = self.history["product name"][i]
+                price = str(self.history["amount"][i])
                 history_label = tk.Label(self, text=timestamp + "\n" + barcode + ", " + name + ", " + price + " kr \n\n", bg=self.bg_color, fg=self.fg_color, font=(self.font, self.accent_font_size))
 
                 history_label.pack()
@@ -203,7 +205,7 @@ class ScanProductPage(tk.Frame):
                 print(str(error))
                 self.after_cancel(self.timeout)
                 self.after_cancel(self.timer)
-                self.controller.show_page(SplashRed, ScanProductPage, self.user, self.timeout_2)
+                self.controller.show_page(SplashFail, ScanProductPage, self.user, self.timeout_2)
             else:
                 self.user.buy(barcode)
 
@@ -218,9 +220,9 @@ class ScanProductPage(tk.Frame):
                 # first the old timeout needs to be cancelled, then we set a new lower time one for each new purchase
                 self.after_cancel(self.timeout)
                 self.after_cancel(self.timer)
-                self.controller.show_page(SplashGreen, ScanProductPage, self.user, self.timeout_2)
+                self.controller.show_page(SplashSucceed, ScanProductPage, self.user, self.timeout_2)
 
 
 if __name__ == "__main__":
-    testObj = Windows(ScanUserPage)
-    testObj.mainloop()
+    gui = Windows(ScanUserPage)
+    gui.mainloop()
